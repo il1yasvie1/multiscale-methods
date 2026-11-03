@@ -1,0 +1,19 @@
+experiment_name: smoke-test
+method: msfem
+
+problem:
+  name: periodic
+  epsilon: [0.05]
+
+mesh:
+  N_H: [2, 4]
+  N_h: [8]
+
+delta: [0.0, 1.0]
+assembly_type: [petrov_galerkin]
+corrector_kind: [elliptic, parabolic]
+
+parabolic_settings:
+  - {final_time: 0.00625, num_time_steps: 10}
+  - {final_time: 0.0125,  num_time_steps: 20}
+

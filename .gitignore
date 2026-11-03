@@ -1,0 +1,6 @@
+__pycache__/
+.ruff_cache/
+.ipynb_checkpoints/
+*.py[cod]
+work/
+README.md
