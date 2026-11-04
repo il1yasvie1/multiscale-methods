@@ -64,3 +64,44 @@ def plot_function_warped(u, filename):
         plotter.screenshot(filename)
     else:
         plotter.show()
+
+
+def plot_oversampling(coarse_mesh, fine_mesh, patch_mesh, filename):
+    plotter = pyvista.Plotter()
+    tdim = coarse_mesh.topology.dim
+
+    fine_mesh.topology.create_connectivity(tdim, tdim)
+    fine_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(fine_mesh, tdim))
+    plotter.add_mesh(fine_grid,
+            show_edges=True,
+            color="w",
+            edge_color="gray",
+            line_width=1,
+            label="Fine mesh")
+
+    coarse_mesh.topology.create_connectivity(tdim, tdim)
+    coarse_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(coarse_mesh, tdim))
+    plotter.add_mesh(coarse_grid,
+            show_edges=True,
+            color="w",
+            edge_color="red",
+            line_width=3,
+            opacity=0.5,
+            label="Coarse mesh")
+
+    patch_mesh.topology.create_connectivity(tdim, tdim)
+    local_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(patch_mesh, tdim))
+    plotter.add_mesh(local_grid,
+            show_edges=True,
+            color="lightskyblue",
+            edge_color="blue",
+            line_width=2,
+            opacity=1,
+            label="Local mesh")
+
+    plotter.view_xy()
+    plotter.show_axes()
+    if pyvista.OFF_SCREEN:
+        plotter.screenshot(filename)
+    else:
+        plotter.show()
