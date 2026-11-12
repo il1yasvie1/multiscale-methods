@@ -148,7 +148,7 @@ def _colored_sweep(table, sweep, figures, *, compare_all=False):
 
 
 def _fixed_parameter_sweep(table, sweep, figures, *, compare_all=False):
-    """Compare correctors in separate panels for the fixed spatial parameter."""
+    """Compare solution and corrector metrics at fixed spatial parameters."""
     x = sweep
     fixed = "delta" if sweep == "H" else "H"
     facets = ("problem", "epsilon", "N_h", "assembly_type")
@@ -159,7 +159,8 @@ def _fixed_parameter_sweep(table, sweep, figures, *, compare_all=False):
             if frame[x].nunique() < 2 or not fixed_values:
                 continue
             kinds = [kind for kind in KINDS if kind in set(frame.corrector_kind)]
-            for metric in SOLUTION_ERROR_METRICS:
+            for metric in (*SOLUTION_ERROR_METRICS, "corrector_l2_error",
+                           "corrector_h1_semi_error", "corrector_jump_l2"):
                 if frame[metric].notna().sum() < 2:
                     continue
                 ncols = len(fixed_values) if len(fixed_values) <= 3 else 2
@@ -177,7 +178,7 @@ def _fixed_parameter_sweep(table, sweep, figures, *, compare_all=False):
                     for kind in kinds:
                         rows = fixed_rows.loc[fixed_rows.corrector_kind == kind].sort_values(x)
                         y = pd.to_numeric(rows[metric], errors="coerce")
-                        if sweep == "H":
+                        if sweep == "H" and metric not in JUMP_COLUMNS:
                             y = y.where(y > 0)
                         if not y.notna().any():
                             continue
@@ -194,13 +195,16 @@ def _fixed_parameter_sweep(table, sweep, figures, *, compare_all=False):
                     if sweep == "H":
                         ax.set_title(parameter_label("delta", value), fontsize=11)
                         ax.set_xscale("log", base=2)
-                        ax.set_yscale("log")
+                        if metric not in JUMP_COLUMNS:
+                            ax.set_yscale("log")
                         ticks = sorted(frame.H.unique())
                         ax.set_xticks(ticks, [power_two_label(tick) for tick in ticks])
                         ax.set_xlim(max(ticks) * 1.05, min(ticks) / 1.05)
                         _avoid_overzoom(ax)
                     else:
                         ax.set_title(parameter_label("H", value, power_two=True), fontsize=11)
+                    if metric in JUMP_COLUMNS:
+                        ax.set_ylim(bottom=0)
                     ax.set_xlabel(AXIS_LABELS[sweep])
                     ax.grid(alpha=0.25)
                 for ax in list(axes.flat)[len(fixed_values):]:

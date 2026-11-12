@@ -127,13 +127,15 @@ def test_parameter_titles_and_legends_follow_notes():
 
 @pytest.mark.parametrize('kind,sweep,expected', [
     ('colored', 'H', 8), ('colored', 'delta', 8),
-    ('fixed', 'H', 3), ('fixed', 'delta', 3), ('time', 'final_time', 6),
+    ('fixed', 'H', 6), ('fixed', 'delta', 6), ('time', 'final_time', 6),
 ])
 def test_sweep_types_share_metric_and_parameter_notation(monkeypatch, tmp_path, kind, sweep, expected):
     from msfem.plotting import time
     from msfem.plotting.notation import AXIS_LABELS
 
     frame = _table()
+    frame.loc[frame.H == 0.25, 'corrector_jump_l2'] = 0.0
+    frame.loc[frame.H == 0.5, 'corrector_jump_l2'] = 3e-14
     frame['run_id'] = [str(index) for index in range(len(frame))]
     second = frame.loc[frame.corrector_kind != 'elliptic'].copy()
     second['final_time'] = 0.0125
@@ -158,6 +160,15 @@ def test_sweep_types_share_metric_and_parameter_notation(monkeypatch, tmp_path, 
                 continue
             refs = [line for line in ax.lines if line.get_label() == r'FEM $u^H$']
             assert len(refs) == int(expect_coarse)
+            if kind == 'fixed' and metric_label == Y_LABELS['corrector_jump_l2']:
+                assert ax.get_yscale() == 'linear'
+                assert ax.get_ylim()[0] == 0
+                for line in ax.lines:
+                    H = line.get_xdata() if sweep == 'H' else (
+                        0.5 if '2^{-1}' in ax.get_title() else 0.25)
+                    np.testing.assert_allclose(line.get_ydata(),
+                                               np.where(np.asarray(H) == 0.5, 3e-14, 0),
+                                               rtol=0, atol=1e-28)
         assert all(ax.get_xlabel() == AXIS_LABELS[sweep] for ax in fig.axes if ax.get_xlabel())
         fig.canvas.draw()
         figures.append(metric_label)
@@ -171,3 +182,7 @@ def test_sweep_types_share_metric_and_parameter_notation(monkeypatch, tmp_path, 
     else:
         assert time._time_sweep(frame, tmp_path, compare_all=True) == expected
     assert len(figures) == expected
+    if kind == 'fixed':
+        assert set(figures) == {Y_LABELS[metric] for metric in (
+            'msfem_l2_error', 'msfem_h1_error', 'msfem_h1_semi_error',
+            'corrector_l2_error', 'corrector_h1_semi_error', 'corrector_jump_l2')}
