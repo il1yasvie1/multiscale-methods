@@ -6,12 +6,15 @@ problem:
   epsilon: [0.05]
 
 mesh:
-  N_H: [2, 4, 8, 16]
+  N_H: [2, 4, 8, 16, 32]
   N_h: [64]
 
-delta: [0, 0.25, 0.5, 0.75, 1.0, 1.25]
+delta: [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2, 3]
 assembly_type: [petrov_galerkin]
-corrector_kind: [elliptic, parabolic]
+corrector_kind: [elliptic, parabolic, modified]
 
 parabolic_settings:
   - {final_time: 0.025, num_time_steps: 40}
+
+modified_settings:
+  - {final_time: 0.025}

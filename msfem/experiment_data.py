@@ -17,11 +17,14 @@ ERROR_COLUMNS = tuple(
     for prefix in ("msfem", "coarse_fem", "fine_fem", "corrector")
     for norm in ("l2", "h1", "h1_semi")
 )
+JUMP_COLUMNS = ("msfem_jump_l2", "corrector_jump_l2")
 COLUMNS = (
     "experiment_name", "run_id", "status", "method", "problem", "epsilon",
+    "random_model", "micro_size", "seed", "correlation_length", "log_std", "low", "high",
     "N_H", "N_h", "H", "h", "delta", "assembly_type", "corrector_kind",
     "final_time", "num_time_steps", "time_step", *COUNT_COLUMNS,
-    *ERROR_COLUMNS, "msfem_jump", "setup_seconds", "offline_seconds",
+    *ERROR_COLUMNS, *JUMP_COLUMNS,
+    "setup_seconds", "offline_seconds",
     "online_seconds", "coarse_fem_solve_seconds", "fine_fem_solve_seconds",
     "metrics_seconds", "error_message",
 )
@@ -43,8 +46,15 @@ def prepare_experiment(config: dict) -> Path:
 
 
 def load_results(csv_path: Path) -> pd.DataFrame:
-    return (pd.read_csv(csv_path, dtype={"run_id": str}) if csv_path.exists()
-            else pd.DataFrame(columns=COLUMNS))
+    table = (pd.read_csv(csv_path, dtype={"run_id": str}) if csv_path.exists()
+             else pd.DataFrame(columns=COLUMNS))
+    return table.reindex(columns=COLUMNS)
+
+
+def completed_run_ids(table: pd.DataFrame) -> set[str]:
+    """Old completed runs need recomputing if either unweighted jump is missing."""
+    complete = (table["status"] == "completed") & table.reindex(columns=JUMP_COLUMNS).notna().all(axis=1)
+    return set(table.loc[complete, "run_id"])
 
 
 def save_result(csv_path: Path, table: pd.DataFrame, row: dict) -> pd.DataFrame:

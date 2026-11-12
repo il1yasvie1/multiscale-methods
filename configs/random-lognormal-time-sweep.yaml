@@ -1,0 +1,25 @@
+experiment_name: random-lognormal-time-sweep
+method: msfem
+
+problem:
+  name: random
+  model: lognormal
+  micro_size: 16
+  seed: 42
+  correlation_length: 0.125
+  log_std: 0.75
+
+mesh:
+  N_H: [8]
+  N_h: [64]
+
+delta: [0.25, 0.5]
+assembly_type: [petrov_galerkin]
+corrector_kind: [elliptic, parabolic]
+
+parabolic_settings:
+  - {final_time: 0.0078125, num_time_steps: 4}
+  - {final_time: 0.0078125, num_time_steps: 64}
+  - {final_time: 0.0078125, num_time_steps: 256}
+  - {final_time: 0.001953125, num_time_steps: 64}
+  - {final_time: 0.03125, num_time_steps: 256}

@@ -20,7 +20,7 @@ def main() -> None:
     if not path.exists() and not path.suffix:
         path = path.with_suffix(".yaml")
     if command == "plot":
-        from msfem.analysis import plot_config
+        from msfem.plotting import plot_config
         plot_config(path)
     else:
         from msfem.experiment import run_config

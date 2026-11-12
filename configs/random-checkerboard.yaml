@@ -1,0 +1,21 @@
+experiment_name: random-checkerboard
+method: msfem
+
+problem:
+  name: random
+  model: checkerboard
+  micro_size: 16
+  seed: 42
+  low: 1.0
+  high: 9.0
+
+mesh:
+  N_H: [2, 4, 8, 16]
+  N_h: [128]
+
+delta: [0, 0.25, 0.5, 0.75, 1.0]
+assembly_type: [petrov_galerkin]
+corrector_kind: [elliptic, parabolic]
+
+parabolic_settings:
+  - {final_time: 0.0078125, num_time_steps: 4}

@@ -1,0 +1,33 @@
+.algorithm {
+  margin-block: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--bs-primary, #3567a0);
+  background: var(--bs-tertiary-bg, #f5f6f8);
+  overflow-x: auto;
+}
+
+.algorithm-line {
+  padding-block: 0.25rem;
+}
+
+.algorithm-line > p {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.algorithm-line.indent-1 {
+  margin-inline-start: 1.25rem;
+}
+
+.algorithm-line.indent-2 {
+  margin-inline-start: 2.5rem;
+}
+
+.algorithm-phase:not(:first-child) {
+  margin-top: 0.75rem;
+}
+
+.algorithm a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

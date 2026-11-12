@@ -7,15 +7,16 @@ import traceback
 from dolfinx import mesh
 from mpi4py import MPI
 
-from .analysis import make_plots
+from .plotting import make_plots
 from .experiment_config import expand_runs, load_config
-from .experiment_data import load_results, prepare_experiment, save_result
-from .experiment_metrics import CorrectorError, jump_norm, solution_errors
+from .experiment_data import completed_run_ids, load_results, prepare_experiment, save_result
+from .experiment_metrics import CorrectorError, interface_jumps, solution_errors
 from .msfem import MsFEM_Oversampling
 from src.elliptic_problem_data import (
     ConstantCoefficientProblem,
     NonConstantCoefficientProblem,
     PeriodicCoefficientProblem,
+    RandomCoefficientProblem,
 )
 
 
@@ -23,10 +24,16 @@ PROBLEMS = {
     "constant": ConstantCoefficientProblem,
     "nonconstant": NonConstantCoefficientProblem,
     "periodic": PeriodicCoefficientProblem,
+    "random": RandomCoefficientProblem,
 }
 
 def _problem(params: dict):
     cls = PROBLEMS[params["problem"]]
+    if params["problem"] == "random":
+        return cls(micro_size=params["micro_size"], seed=params["seed"],
+                   model=params["random_model"],
+                   correlation_length=params["correlation_length"],
+                   log_std=params["log_std"], low=params["low"], high=params["high"])
     return cls(params["epsilon"]) if params["problem"] == "periodic" else cls()
 
 
@@ -83,19 +90,31 @@ def run_one(params: dict, baseline_cache: dict) -> dict:
     started = perf_counter()
     solution = method.online()
     result["online_seconds"] = comm.allreduce(perf_counter() - started, op=MPI.MAX)
+    started = perf_counter()
+    result.update(interface_jumps(method, solution))
+    jump_seconds = perf_counter() - started
 
     if comm.rank == 0:
-        key = (params["problem"], params["epsilon"], params["N_H"], params["N_h"])
-        if key not in baseline_cache:
-            baseline_cache[key] = _baseline(method, problem)
-        result.update(baseline_cache[key])
+        if params["problem"] == "random":
+            # Reference and reconstructed solution must live on this run's mesh.
+            started = perf_counter()
+            reference = problem.reference_solution(method.fine_mesh)
+            result["fine_fem_solve_seconds"] = perf_counter() - started
+            result["num_of_fine_dofs"] = reference.function_space.dofmap.index_map.size_local
+            def target(domain):
+                return reference
+        else:
+            key = (params["problem"], params["epsilon"], params["N_H"], params["N_h"])
+            if key not in baseline_cache:
+                baseline_cache[key] = _baseline(method, problem)
+            result.update(baseline_cache[key])
+            target = problem.exact_solution
         started = perf_counter()
         result.update({f"msfem_{key}": value for key, value in
-                       solution_errors(solution, problem.exact_solution).items()})
-        result["msfem_jump"] = jump_norm(solution, params["H"])
+                       solution_errors(solution, target).items()})
         if corrector_error is not None:
             result.update(corrector_error.results())
-        result["metrics_seconds"] = perf_counter() - started + (
+        result["metrics_seconds"] = perf_counter() - started + jump_seconds + (
             corrector_error.seconds if corrector_error else 0.0
         )
         method.A_H.destroy()
@@ -112,7 +131,7 @@ def run_config(config_path: Path) -> None:
             csv_path = prepare_experiment(config)
             output = csv_path.parent
             table = load_results(csv_path)
-            completed = set(table.loc[table["status"] == "completed", "run_id"])
+            completed = completed_run_ids(table)
             runs = [params for params in expand_runs(config)
                     if params["run_id"] not in completed]
         except Exception as error:
@@ -161,4 +180,4 @@ def run_config(config_path: Path) -> None:
         if failures:
             raise SystemExit(f"{failures} runs failed; see {csv_path} and per-run logs")
         print(f"Results: {csv_path}")
-        print(f"Created {make_plots(csv_path)} figures in {output / 'figures'}")
+        print(f"Created {make_plots(csv_path, config=config)} figures in {output / 'figures'}")

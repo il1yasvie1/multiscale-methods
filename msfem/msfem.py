@@ -11,7 +11,11 @@ from petsc4py import PETSc
 from src.elliptic_problem_data import EllipticProblemData
 from src.oversampling import oversampling
 from src.two_level_mesh import refine_with_meshtags
-from src.local_correctors import get_local_elliptic_correctors, get_local_parabolic_correctors
+from src.local_correctors import (
+    get_local_elliptic_correctors,
+    get_local_modified_correctors,
+    get_local_parabolic_correctors,
+)
 from src.local_basis import get_local_affine_basis_extensions, get_local_multiscale_basis
 from src.utils import boundary_dofs
 
@@ -20,7 +24,7 @@ from src.utils import boundary_dofs
 class CellBasisData:
     fine_dofs: np.ndarray
     basis_values: np.ndarray
-    fine_cells: np.ndarray
+    corrector_values: np.ndarray
 
 
 class MsFEM_Oversampling:
@@ -86,6 +90,7 @@ class MsFEM_Oversampling:
         coarse_cell_fine_cells: np.ndarray,
         coarse_cell_patch_cells: np.ndarray,
         multiscale_basis: list[fem.Function],
+        correctors: list[fem.Function],
     ) -> CellBasisData:
         fine_cells = np.asarray(coarse_cell_fine_cells, dtype=np.int32)
         patch_cells = np.asarray(coarse_cell_patch_cells, dtype=np.int32)
@@ -93,35 +98,40 @@ class MsFEM_Oversampling:
         fine_dofs = np.concatenate([
             self.V_multiscale.dofmap.cell_dofs(int(cell)) for cell in fine_cells
         ]).astype(np.int32)
-        basis_values = np.empty(
-            (fine_dofs.size, len(multiscale_basis)),
+        values = np.empty(
+            (fine_dofs.size, len(multiscale_basis) + len(correctors)),
             dtype=dolfinx.default_scalar_type,
         )
-        for j, psi in enumerate(multiscale_basis):
+        for j, psi in enumerate([*multiscale_basis, *correctors]):
             psi_fine = fem.Function(self.V_multiscale)
             psi_fine.interpolate(psi, patch_cells, fine_cells)
-            basis_values[:, j] = psi_fine.x.array[fine_dofs]
+            values[:, j] = psi_fine.x.array[fine_dofs]
 
         return CellBasisData(
             fine_dofs=fine_dofs,
-            basis_values=basis_values,
-            fine_cells=fine_cells.copy(),
+            basis_values=values[:, :len(multiscale_basis)].copy(),
+            corrector_values=values[:, len(multiscale_basis):].copy(),
         )
 
     def offline(
         self,
         delta: float,
         *,
-        corrector_kind: Literal["elliptic", "parabolic"] = "elliptic",
+        corrector_kind: Literal["elliptic", "parabolic", "modified"] = "elliptic",
         final_time: float | None = None,
         num_time_steps: int | None = None,
         assembly_type: str = "petrov_galerkin",
         corrector_observer: Callable | None = None,
     ) -> None:
-        if corrector_kind not in ("elliptic", "parabolic"):
-            raise ValueError("corrector_kind must be 'elliptic' or 'parabolic'")
+        if corrector_kind not in ("elliptic", "parabolic", "modified"):
+            raise ValueError("corrector_kind must be 'elliptic', 'parabolic' or 'modified'")
         if corrector_kind == "parabolic" and (final_time is None or num_time_steps is None):
             raise ValueError("Parabolic correctors require final_time and num_time_steps")
+        if corrector_kind == "modified":
+            if final_time is None or not np.isfinite(final_time) or final_time <= 0:
+                raise ValueError("Modified correctors require a finite positive final_time")
+            if num_time_steps is not None:
+                raise ValueError("num_time_steps is only used by parabolic correctors")
         if assembly_type not in ("petrov_galerkin", "galerkin"):
             raise ValueError("assembly_type must be 'petrov_galerkin' or 'galerkin'")
 
@@ -135,6 +145,8 @@ class MsFEM_Oversampling:
 
                 if corrector_kind == "elliptic":
                     correctors = get_local_elliptic_correctors(V_patch, self.problem)
+                elif corrector_kind == "modified":
+                    correctors = get_local_modified_correctors(V_patch, self.problem, final_time)
                 else:
                     correctors = get_local_parabolic_correctors(
                         V_patch, self.problem,
@@ -166,6 +178,7 @@ class MsFEM_Oversampling:
                         coarse_cell_fine_cells,
                         coarse_cell_patch_cells,
                         multiscale_basis,
+                        correctors,
                     )
                 )
                 del multiscale_basis, affine_basis, correctors, V_patch

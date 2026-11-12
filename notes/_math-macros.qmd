@@ -1,0 +1,1 @@
+\newcommand{\fint}{\mathop{\unicode{x2A0F}}\nolimits}

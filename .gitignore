@@ -3,5 +3,22 @@ __pycache__/
 .ipynb_checkpoints/
 *.py[cod]
 work/
-demo.py
 .DS_Store
+
+# Local test and Quarto build caches
+.pytest_cache/
+.quarto/
+/notes/_freeze/
+/notes/_site/
+/notes/*_cache/
+
+# Optional figure export (the notes use oversampling.png)
+/notes/assets/oversampling.svg
+
+# Intermediate PDF/LaTeX exports; keep the HTML and its runtime dependencies
+/notes/notes.pdf
+/notes/notes.tex
+/notes/*.aux
+/notes/*.log
+/notes/*.out
+/notes/*.toc

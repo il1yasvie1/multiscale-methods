@@ -1,4 +1,4 @@
-"""Shared plot labels, styling, and grouping helpers."""
+"""Shared plot styling, legends, and grouping helpers."""
 
 import math
 
@@ -10,64 +10,29 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-METRICS = (
-    "msfem_l2_error", "msfem_h1_error", "msfem_h1_semi_error",
-    "msfem_jump", "corrector_l2_error", "corrector_h1_error",
-    "corrector_h1_semi_error",
+from .notation import (
+    AXIS_LABELS, FEM_REFERENCE_STYLES, KIND_LABELS, OVERVIEW_METRICS,
+    PARAMETER_SYMBOLS, parameter_expression, parameter_label, power_two_label,
 )
-OVERVIEW_METRICS = (
-    "corrector_l2_error", "corrector_h1_semi_error", "msfem_jump",
-    "msfem_l2_error", "msfem_h1_semi_error",
-)
-FIXED_H_METRICS = (
-    "msfem_l2_error", "msfem_h1_error", "msfem_h1_semi_error",
-)
-KINDS = {"elliptic": (cm.Blues, "o"), "parabolic": (cm.Reds, "s")}
-Y_LABELS = {
-    "msfem_l2_error": r"$\|u^\varepsilon-u_{H,h}^{\mathrm{MsFEM}}\|_{L^2(\Omega)}$",
-    "msfem_h1_error": r"$\|u^\varepsilon-u_{H,h}^{\mathrm{MsFEM}}\|_{H^1(\mathcal{T}_H)}$",
-    "msfem_h1_semi_error": r"$|u^\varepsilon-u_{H,h}^{\mathrm{MsFEM}}|_{H^1(\mathcal{T}_H)}$",
-    "msfem_jump": (
-        r"$\left(\sum_{F\in\mathcal{F}_H^{\mathrm{int}}}"
-        r"H^{-1}\|[u_{H,h}^{\mathrm{MsFEM}}]\|_{L^2(F)}^2\right)^{1/2}$"
-    ),
-    "corrector_l2_error": (
-        r"$\left(\sum_{K\in\mathcal{T}_H}\sum_{j=1}^{2}"
-        r"\|w_{K,j}-\chi_j^\varepsilon\|_{L^2(K)}^2\right)^{1/2}$"
-    ),
-    "corrector_h1_error": (
-        r"$\left(\sum_{K\in\mathcal{T}_H}\sum_{j=1}^{2}"
-        r"\|w_{K,j}-\chi_j^\varepsilon\|_{H^1(K)}^2\right)^{1/2}$"
-    ),
-    "corrector_h1_semi_error": (
-        r"$\left(\sum_{K\in\mathcal{T}_H}\sum_{j=1}^{2}"
-        r"|w_{K,j}-\chi_j^\varepsilon|_{H^1(K)}^2\right)^{1/2}$"
-    ),
-}
-OVERVIEW_NAMES = (
-    r"Corrector $L^2$ error norm", r"Corrector $H^1$ error semi-norm",
-    "MsFEM jump norm", r"MsFEM $L^2$ error norm",
-    r"MsFEM $H^1$ error semi-norm",
-)
-OVERVIEW_TITLES = {
-    metric: name + "\n" + Y_LABELS[metric]
-    for metric, name in zip(OVERVIEW_METRICS, OVERVIEW_NAMES)
+
+
+KINDS = {"elliptic": (cm.Blues, "o"), "parabolic": (cm.Reds, "s"),
+         "modified": (cm.Greens, "^")}
+MODE_STYLES = {
+    "elliptic": dict(linestyle="--", markersize=8, zorder=3),
+    "parabolic": dict(linestyle="-", markersize=4, zorder=4),
+    "modified": dict(linestyle="-.", markersize=9, markerfacecolor="none", zorder=5),
 }
 
 
 def _parameter_title(columns, values, T=None, Nt=None):
-    symbols = {
-        "epsilon": r"\varepsilon", "N_H": "N_H", "N_h": "N_h",
-        "delta": r"\delta", "H": "H",
-    }
-    parts = []
-    for key, value in zip(columns, values):
-        if key == "assembly_type":
-            parts.append(r"\mathrm{PG}" if value == "petrov_galerkin" else r"\mathrm{G}")
-        elif key in symbols and pd.notna(value):
-            parts.append(f"{symbols[key]}={value:g}")
+    parts = [parameter_expression(key, value) for key, value in zip(columns, values)
+             if (key in PARAMETER_SYMBOLS or key in ("assembly_type", "N_H", "N_h"))
+             and pd.notna(value)]
     if T is not None:
-        parts.extend((f"T={T:g}", f"N_t={Nt}"))
+        parts.append(parameter_expression("final_time", T))
+        if Nt is not None:
+            parts.append(parameter_expression("num_time_steps", Nt))
     return "$" + r",\;".join(parts) + "$"
 
 
@@ -76,24 +41,22 @@ def _groups(frame, columns):
         yield values if isinstance(values, tuple) else (values,), rows
 
 
-def _time_groups(table):
-    settings = table.loc[
-        table.corrector_kind == "parabolic", ["final_time", "num_time_steps"]
-    ].drop_duplicates()
-    if settings.empty:
+def _time_groups(table, *, compare_all=False):
+    timed = table.loc[table.final_time.notna()]
+    if timed.empty and not compare_all:
         yield None, None, table
-    for T, Nt in settings.itertuples(index=False, name=None):
-        rows = table.loc[
-            (table.corrector_kind == "elliptic")
-            | ((table.corrector_kind == "parabolic")
-               & (table.final_time == T) & (table.num_time_steps == Nt))
-        ]
-        yield T, int(Nt), rows
-
-
-def _power_two_label(value):
-    exponent = round(math.log2(float(value)))
-    return rf"$2^{{{exponent}}}$" if math.isclose(float(value), 2.0**exponent) else f"{value:g}"
+    for T, at_time in timed.groupby("final_time"):
+        shared = ((table.corrector_kind == "elliptic")
+                  | ((table.corrector_kind == "modified") & (table.final_time == T)))
+        steps = sorted(at_time.num_time_steps.dropna().unique())
+        for Nt in steps or [None]:
+            selected = shared | ((table.final_time == T) & (table.num_time_steps == Nt))
+            rows = table.loc[selected]
+            if compare_all:
+                coverage = rows.groupby(["H", "delta"]).corrector_kind.transform("nunique")
+                rows = rows.loc[coverage == len(KINDS)]
+            if not rows.empty:
+                yield T, None if Nt is None else int(Nt), rows
 
 
 def _color(kind, value, low, high, parameter):
@@ -105,12 +68,11 @@ def _color(kind, value, low, high, parameter):
 
 
 def _add_color_keys(fig, ax, kinds, values, parameter):
-    """Place category legend and two parameter color scales outside the axes."""
+    """Place the category legend and parameter color scales outside the axes."""
     handles = [
         Line2D([0], [0], color=KINDS[kind][0](0.8), marker=KINDS[kind][1],
-               linestyle="--" if kind == "elliptic" else "-",
-               markerfacecolor="white" if kind == "elliptic" else None,
-               label=kind if len(values) > 1 else f"{kind}, {parameter}={values[0]:g}")
+               **MODE_STYLES[kind],
+               label=KIND_LABELS[kind] if len(values) > 1 else f"{KIND_LABELS[kind]}, {parameter_label(parameter, values[0])}")
         for kind in kinds
     ]
     old_handles, old_labels = ax.get_legend_handles_labels()
@@ -131,13 +93,13 @@ def _add_color_keys(fig, ax, kinds, values, parameter):
             norm=colors.Normalize(vmin=low, vmax=high if high > low else low + 1),
             cmap=palette,
         )
-        bar_ax = fig.add_axes([0.78 + 0.11 * index, 0.2, 0.022, 0.46])
+        bar_ax = fig.add_axes([0.76 + 0.22 * index / len(kinds), 0.2, 0.019, 0.46])
         bar = fig.colorbar(scale, cax=bar_ax, ticks=values)
         if parameter == "H":
-            bar.ax.set_yticklabels([_power_two_label(value) for value in values])
+            bar.ax.set_yticklabels([power_two_label(value) for value in values])
         bar.ax.tick_params(labelsize=7)
         bar.ax.set_title(
-            f"{kind}\n" + (r"$\delta$" if parameter == "delta" else r"$H$"),
+            f"{KIND_LABELS[kind]}\n" + AXIS_LABELS[parameter],
             fontsize=8, pad=5,
         )
 
@@ -153,7 +115,7 @@ def _avoid_overzoom(ax):
 
 def _overview_axes(rows):
     height = 6.0 if rows == 1 else 6.3 * rows + 0.4
-    fig, axes = plt.subplots(rows, 5, figsize=(24, height),
+    fig, axes = plt.subplots(rows, len(OVERVIEW_METRICS), figsize=(4.8 * len(OVERVIEW_METRICS), height),
                              squeeze=False, sharex="col")
     fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.82,
                         wspace=0.28, hspace=0.55)
@@ -162,17 +124,18 @@ def _overview_axes(rows):
     return fig, axes
 
 
-def _overview_keys(fig, kinds, values, parameter):
+def _overview_keys(fig, kinds, values, parameter, *, fem_references=False):
     handles = [Line2D([0], [0], color=KINDS[kind][0](0.8),
                       marker=KINDS[kind][1],
-                      linestyle="--" if kind == "elliptic" else "-",
-                      markerfacecolor="white" if kind == "elliptic" else None,
-                      label=kind) for kind in kinds]
+                      **MODE_STYLES[kind],
+                      label=KIND_LABELS[kind]) for kind in kinds]
+    if fem_references:
+        handles.extend(Line2D([0], [0], **style)
+                       for style in FEM_REFERENCE_STYLES.values())
     fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.98, 0.99),
                ncol=len(handles), frameon=False)
     if len(values) < 2:
-        symbol = r"\delta" if parameter == "delta" else "H"
-        fig.text(0.5, 0.05, f"${symbol}={values[0]:g}$", fontsize=10,
+        fig.text(0.5, 0.05, parameter_label(parameter, values[0]), fontsize=10,
                  ha="center")
         return
     for index, kind in enumerate(kinds):
@@ -183,13 +146,14 @@ def _overview_keys(fig, kinds, values, parameter):
             norm=colors.Normalize(vmin=min(values), vmax=max(values)),
             cmap=colors.LinearSegmentedColormap.from_list(f"overview_{kind}", shades),
         )
-        bar_ax = fig.add_axes([0.20 + 0.40 * index, 0.035, 0.28, 0.018])
+        slot = 0.8 / len(kinds)
+        bar_ax = fig.add_axes([0.1 + slot * (index + 0.15), 0.035, 0.7 * slot, 0.018])
         bar = fig.colorbar(scale, cax=bar_ax, ticks=values,
                            orientation="horizontal")
         if parameter == "H":
-            bar.ax.set_xticklabels([_power_two_label(value) for value in values])
+            bar.ax.set_xticklabels([power_two_label(value) for value in values])
         bar.ax.tick_params(labelsize=8, pad=2)
-        bar.ax.set_title(f"{kind}\n" + (r"$H$" if parameter == "H" else r"$\delta$"),
+        bar.ax.set_title(f"{KIND_LABELS[kind]}\n" + AXIS_LABELS[parameter],
                          fontsize=9, pad=3)
 
 
