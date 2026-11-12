@@ -18,8 +18,8 @@ from .files import facet_id, save_figure, save_sweep_figure
 
 
 def _add_fem_references(ax, frame, metric, sweep):
-    """Standard FEM solves of the same oscillatory PDE, on V^H and V^h."""
-    if metric not in SOLUTION_ERROR_METRICS:
+    """Coarse FEM references for MsFEM L2 and H1 seminorm errors versus H."""
+    if sweep != "H" or metric not in ("msfem_l2_error", "msfem_h1_semi_error"):
         return
     for baseline, style in FEM_REFERENCE_STYLES.items():
         column = metric.replace("msfem", baseline, 1)
@@ -28,10 +28,7 @@ def _add_fem_references(ax, frame, metric, sweep):
         rows = frame[["H", column]].dropna().drop_duplicates("H").sort_values("H")
         if rows.empty:
             continue
-        if sweep == "H" and baseline == "coarse_fem":
-            ax.plot(rows.H, rows[column], linewidth=1.4, **style)
-        elif baseline == "fine_fem" or rows.H.nunique() == 1:
-            ax.axhline(float(rows[column].iloc[0]), linewidth=1.4, **style)
+        ax.plot(rows.H, rows[column], linewidth=1.4, **style)
 
 
 def _overview_sweep(table, sweep, figures, *, compare_all=False):
@@ -89,8 +86,9 @@ def _overview_sweep(table, sweep, figures, *, compare_all=False):
                 _avoid_overzoom(ax)
                 ax.grid(alpha=0.25)
         _overview_keys(fig, kinds, shades, shade_by,
-                       fem_references=any(name in frame and frame[name].notna().any()
-                                          for name in ("coarse_fem_l2_error", "fine_fem_l2_error")))
+                       fem_references=(sweep == "H" and any(
+                           name in frame and frame[name].notna().any()
+                           for name in ("coarse_fem_l2_error", "coarse_fem_h1_semi_error"))))
         save_figure(fig, figures / sweep / f"overview_{sweep}_{facet_id(facet_values)}.png")
         count += 1
     return count

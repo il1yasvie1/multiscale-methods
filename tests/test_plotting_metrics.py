@@ -27,25 +27,24 @@ def _table():
     return pd.DataFrame(rows)
 
 
-def test_fem_references_on_H_and_delta_axes():
+@pytest.mark.parametrize('metric', METRICS)
+@pytest.mark.parametrize('sweep', ['H', 'delta'])
+def test_fem_references_on_H_and_delta_axes(metric, sweep):
     table = _table()
     fig, ax = plt.subplots()
-    spatial._add_fem_references(ax, table, 'msfem_l2_error', 'H')
-    coarse, fine = ax.lines
-    np.testing.assert_allclose(coarse.get_xdata(), [0.25, 0.5])
-    np.testing.assert_allclose(coarse.get_ydata(), [0.0625, 0.25])
-    np.testing.assert_allclose(fine.get_ydata(), [0.001, 0.001])
-    plt.close(fig)
-    fig, ax = plt.subplots()
-    spatial._add_fem_references(ax, table.loc[table.H == 0.5], 'msfem_l2_error', 'delta')
-    coarse, fine = ax.lines
-    np.testing.assert_allclose(coarse.get_ydata(), [0.25, 0.25])
-    np.testing.assert_allclose(fine.get_ydata(), [0.001, 0.001])
+    frame = table if sweep == 'H' else table.loc[table.H == 0.5]
+    spatial._add_fem_references(ax, frame, metric, sweep)
+    if sweep == 'H' and metric in ('msfem_l2_error', 'msfem_h1_semi_error'):
+        coarse, = ax.lines
+        np.testing.assert_allclose(coarse.get_xdata(), [0.25, 0.5])
+        np.testing.assert_allclose(coarse.get_ydata(), [0.0625, 0.25])
+    else:
+        assert not ax.lines
     plt.close(fig)
 
 
 @pytest.mark.parametrize('missing_jumps', [False, True])
-def test_overviews_use_both_jumps_and_fixed_H_delta_references(monkeypatch, tmp_path, missing_jumps):
+def test_overviews_use_both_jumps_and_only_H_references(monkeypatch, tmp_path, missing_jumps):
     table = _table()
     assert OVERVIEW_METRICS == (
         'corrector_l2_error', 'corrector_h1_semi_error', 'corrector_jump_l2',
@@ -73,9 +72,10 @@ def test_overviews_use_both_jumps_and_fixed_H_delta_references(monkeypatch, tmp_
         for column in ('msfem_l2_error', 'msfem_h1_semi_error'):
             ax = axes[OVERVIEW_METRICS.index(column)]
             refs = [line for line in ax.lines if line.get_label().startswith('FEM')]
-            assert len(refs) == 2
-            if path.parent.name == 'delta':
-                assert all(len(set(line.get_ydata())) == 1 for line in refs)
+            expected = [r'FEM $u^H$'] if path.parent.name == 'H' else []
+            assert [line.get_label() for line in refs] == expected
+        legend_labels = [text.get_text() for legend in fig.legends for text in legend.get_texts()]
+        assert (r'FEM $u^H$' in legend_labels) == (path.parent.name == 'H')
         captured.append(path)
         plt.close(fig)
     monkeypatch.setattr(spatial, 'save_figure', inspect_figure)
@@ -115,7 +115,7 @@ def test_parameter_titles_and_legends_follow_notes():
     assert 'h=1/128' in title and 'N_h' not in title
     assert 'T=0.025' in title and 'N_t=40' in title
     assert r'\mathrm{PG}' in title
-    assert [style['label'] for style in FEM_REFERENCE_STYLES.values()] == [r'FEM $u^H$', r'FEM $u^h$']
+    assert [style['label'] for style in FEM_REFERENCE_STYLES.values()] == [r'FEM $u^H$']
     fig, ax = plt.subplots()
     _add_color_keys(fig, ax, ['elliptic', 'parabolic', 'modified'], [0.5], 'delta')
     labels = [text.get_text() for text in ax.get_legend().get_texts()]
@@ -143,10 +143,21 @@ def test_sweep_types_share_metric_and_parameter_notation(monkeypatch, tmp_path, 
         frame = pd.concat([frame, second], ignore_index=True)
     figures = []
     def inspect_figure(fig, *args, **kwargs):
+        assert all(line.get_label() != r'FEM $u^h$'
+                   for ax in fig.axes for line in ax.lines)
+        assert all(text.get_text() != r'FEM $u^h$'
+                   for legend in fig.legends for text in legend.get_texts())
         title = fig._suptitle.get_text() if fig._suptitle else fig.axes[0].get_title()
         assert 'h=1/32' in title
         metric_label = fig._supylabel.get_text() if fig._supylabel else fig.axes[0].get_ylabel()
         assert metric_label in Y_LABELS.values()
+        expect_coarse = sweep == 'H' and metric_label in (
+            Y_LABELS['msfem_l2_error'], Y_LABELS['msfem_h1_semi_error'])
+        for ax in fig.axes:
+            if not ax.get_visible() or not ax.get_xlabel():
+                continue
+            refs = [line for line in ax.lines if line.get_label() == r'FEM $u^H$']
+            assert len(refs) == int(expect_coarse)
         assert all(ax.get_xlabel() == AXIS_LABELS[sweep] for ax in fig.axes if ax.get_xlabel())
         fig.canvas.draw()
         figures.append(metric_label)

@@ -47,7 +47,6 @@ KIND_LABELS = {"elliptic": r"$\alpha=\mathrm{ell}$",
                "modified": r"$\alpha=\mathrm{mod}$"}
 FEM_REFERENCE_STYLES = {
     "coarse_fem": dict(label=r"FEM $u^H$", color="0.25", linestyle="--"),
-    "fine_fem": dict(label=r"FEM $u^h$", color="0.55", linestyle=":"),
 }
 PARAMETER_SYMBOLS = {"epsilon": r"\varepsilon", "H": "H", "h": "h",
                      "delta": r"\delta", "final_time": "T", "num_time_steps": "N_t"}
