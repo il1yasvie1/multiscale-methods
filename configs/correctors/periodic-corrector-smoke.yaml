@@ -1,0 +1,26 @@
+experiment: correctors
+
+problem:
+  name: periodic
+  epsilon: 1.0
+
+R:
+  start: 1.0
+  stop: 2.0
+  num: 11
+
+delta: 1.5
+
+mesh:
+  points_per_unit: 16
+
+T:
+  start: 1.0
+  stop: 3.0
+  num: 3
+  default_setting: true
+
+corrector_kind: [elliptic, parabolic, modified]
+
+parabolic_settings:
+  max_time_step: 0.2

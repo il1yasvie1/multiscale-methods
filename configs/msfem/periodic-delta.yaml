@@ -1,0 +1,19 @@
+experiment: msfem
+method: msfem
+
+problem:
+  name: periodic
+  epsilon: [0.05]
+
+mesh:
+  N_H: [8]
+  N_h: [128]
+
+delta: [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2, 4]
+assembly_type: [petrov_galerkin]
+corrector_kind: [modified]
+
+modified_settings:
+  - {final_time: 0.025}
+
+  

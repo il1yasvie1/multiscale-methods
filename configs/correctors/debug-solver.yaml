@@ -1,0 +1,45 @@
+experiment: correctors
+
+problem:
+  name: periodic
+  epsilon: 1.0
+
+R:
+  start: 1.5
+  stop: 1.5
+  num: 1
+
+delta: 1.5
+
+mesh:
+  points_per_unit: 16
+
+T:
+  start: 1.0
+  stop: 1.0
+  num: 1
+
+corrector_kind: [elliptic, parabolic, modified]
+
+parabolic_settings:
+  max_time_step: 0.2
+
+solver_parameters:
+  elliptic:
+    ksp_view: true
+    ksp_monitor: true
+  parabolic:
+    initial:
+      ksp_type: cg
+      pc_type: mg
+      ksp_view: true
+      ksp_monitor: true
+    step:
+      ksp_type: cg
+      pc_type: mg
+      ksp_view: true
+      ksp_monitor: true
+  modified:
+    mfn:
+      mfn_view: true
+      mfn_monitor: true
