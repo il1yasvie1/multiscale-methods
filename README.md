@@ -28,8 +28,7 @@ configs/msfem/          MsFEM experiment YAML files
 configs/correctors/     Corrector experiment YAML files
 results/                Generated runs and figures, grouped by experiment (ignored by Git)
 tests/                  Correctness checks
-docs/msfem_docs/        MsFEM mathematical notes and figures
-docs/correctors_docs/   Corrector notes
+docs/msfem/             MsFEM mathematical notes and figures
 ```
 
 The existing MsFEM solver is available as
@@ -92,4 +91,4 @@ python run_experiment.py --help
 python -m experiments.msfem.plotting.fields --help
 ```
 
-[MsFEM notes](docs/msfem_docs/msfem_docs.html)
+[MsFEM notes source](docs/msfem/msfem.qmd)

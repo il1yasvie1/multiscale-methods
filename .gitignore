@@ -13,16 +13,18 @@ __pycache__/
 /docs/*/_freeze/
 /docs/*/_site/
 /docs/*/*_cache/
+/docs/*/*.html
+/docs/*/*_files/
 
 # Optional figure export (the notes use oversampling.png)
-/docs/msfem_docs/assets/oversampling.svg
+/docs/msfem/assets/oversampling.svg
 
-# Intermediate PDF/LaTeX exports; keep the HTML and its runtime dependencies
-/docs/msfem_docs/msfem_docs.pdf
-/docs/msfem_docs/msfem_docs.tex
-/docs/msfem_docs/*.aux
-/docs/msfem_docs/*.log
-/docs/msfem_docs/*.out
-/docs/msfem_docs/*.toc
+# Intermediate PDF/LaTeX exports from Quarto
+/docs/msfem/msfem.pdf
+/docs/msfem/msfem.tex
+/docs/msfem/*.aux
+/docs/msfem/*.log
+/docs/msfem/*.out
+/docs/msfem/*.toc
 
 /logs

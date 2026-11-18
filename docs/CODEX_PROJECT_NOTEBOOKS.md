@@ -5,9 +5,9 @@
 - [ ] Inspect the working tree. Confirm that additions, moves, and deletions are intentional, especially while the old `src/`, `msfem/`, `run.py`, and `tests/` paths are being reorganized.
 - [ ] **Regenerate the repository tree below from the actual working tree before committing.** Include every project file, including new untracked files. Update directory and file names, provenance labels, progress, last local edit dates, and the next task. Keep ignored caches, build products, and experiment results in the separate generated-artifacts note.
 - [ ] Preserve the provenance boundary: `multiscale/` is **human-verified** by the project owner; `experiments/` is **AI-generated**. Other paths stay unclassified until the owner assigns them. Do not silently promote an AI-generated file. Record the human review that justifies each promotion. The metrics code is a planned first promotion, not an accomplished one.
-- [ ] Check implementation names and mathematical notation against [`docs/msfem_docs/msfem_docs.qmd`](docs/msfem_docs/msfem_docs.qmd) and [`docs/msfem_docs/_math-macros.qmd`](docs/msfem_docs/_math-macros.qmd). Update the notes when an implementation decision changes their definitions.
+- [ ] Check implementation names and mathematical notation against [`docs/msfem/msfem.qmd`](msfem/msfem.qmd). Update the notes when an implementation decision changes their definitions.
 - [ ] Check that the status and “Next” entries below describe the code being committed. Run checks relevant to the changed code and record any missing coverage. The current working tree does not contain a `tests/` directory.
-- [ ] Review the final diff and commit only the intended project files. In particular, confirm whether generated `docs/msfem_docs/msfem_docs.html` and `docs/msfem_docs/msfem_docs_files/` need updating when the Quarto source changes.
+- [ ] Review the final diff and commit only the intended project files.
 
 ## Status key and update rule
 
@@ -23,16 +23,13 @@ The corrector interface and boundary helper changed on 2026-11-17 are awaiting o
 ```text
 multiscale-methods/
 ├── .gitignore                         [U]
-├── .nojekyll                          [U]
-├── CODEX_PROJECT_NOTEBOOKS.md        [U; notebook; edited 2026-11-17]
 ├── README.md                          [U]
-├── index.html                         [U]
 ├── pyproject.toml                     [U]
 ├── run_experiment.py                  [U; experiment entry point]
 ├── configs/                           [U; experiment configuration]
 ├── experiments/                       [AI; experiment code]
 ├── multiscale/                        [HV; core library]
-└── docs/                              [U/GEN; experiment notes and rendered pages]
+└── docs/                              [U; experiment and mathematical notes]
 ```
 
 <details>
@@ -112,32 +109,28 @@ configs/                               [U]
 </details>
 
 <details>
-<summary><code>docs/</code> — U source, GEN rendered output · latest local edit 2026-11-17</summary>
+<summary><code>docs/</code> — U source · latest local edit 2026-11-18</summary>
 
 ```text
 docs/
-├── correctors_docs/
-│   └── correctors_docs.qmd             [U; empty placeholder]
-└── msfem_docs/
-    ├── _math-macros.qmd                [U; notation source]
-    ├── msfem_docs.qmd                  [U; primary notation/algorithm source]
+├── CODEX_PROJECT_NOTEBOOKS.md         [U; notebook]
+└── msfem/
+    ├── msfem.qmd                       [U; primary notation/algorithm source]
     ├── notes.css                       [U]
-    ├── msfem_docs.html                 [GEN; rendered Quarto page]
     ├── plot_oversampling.py           [U; figure generator]
     ├── assets/
     │   └── oversampling.png           [U; included figure]
-    └── msfem_docs_files/              [GEN; rendered page runtime]
 ```
 
 </details>
 
 </details>
 
-Ignored local artifacts, outside the project-file tree: `.git/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `build/`, `multiscale_methods.egg-info/`, `results/`, and the ignored optional `docs/msfem_docs/assets/oversampling.svg`. Recheck this list when `.gitignore` changes. The old `src/`, top-level `msfem/`, `run.py`, and `tests/` paths are currently absent from the working tree; their tracked deletions and replacements still need review before a commit.
+Ignored local artifacts, outside the project-file tree: `.git/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `build/`, `multiscale_methods.egg-info/`, `results/`, and the ignored optional `docs/msfem/assets/oversampling.svg`. Recheck this list when `.gitignore` changes. The old `src/`, top-level `msfem/`, `run.py`, and `tests/` paths are currently absent from the working tree; their tracked deletions and replacements still need review before a commit.
 
 ## Conventions and notation
 
-Use [`docs/msfem_docs/msfem_docs.qmd`](docs/msfem_docs/msfem_docs.qmd) as the current MsFEM notation source. Keep this notebook focused on the core method; the detailed experimental metrics, plots, and CSV schema remain in the documentation and `experiments/`.
+Use [`docs/msfem/msfem.qmd`](msfem/msfem.qmd) as the current MsFEM notation source. Keep this notebook focused on the core method; the detailed experimental metrics, plots, and CSV schema remain in the documentation and `experiments/`.
 
 | Symbol or term | Meaning in this project |
 | --- | --- |
@@ -163,7 +156,7 @@ $$
 2. **MsFEM method — implemented, later generalization.** `MsFEM_Oversampling` currently coordinates patch construction, correctors, basis construction, core-cell assembly, and reconstruction. A later, more general `MultiscaleFiniteElementMethod` should expose reusable stages and methods, with the **corrector formulation** remaining the organizing idea. Preserve the working Strategy 2 path while extracting common responsibilities.
 3. **Oversampling — implemented.** `multiscale/patches/oversampling.py` currently selects fine cells by affine barycentric-coordinate inequalities, a **geometric** rule tied to the simplex and mesh geometry. A separate **topological** rule used elsewhere expands by fine-mesh adjacency layers; it is not this implementation. Keep patch selection in `patches/` so later methods can use other policies. Possible future consumers include localized LOD correctors, GMsFEM neighborhood construction, patch diagnostics, and Schwarz-type local solvers; each needs its own patch semantics and basis logic.
 4. **Correctors — interface implemented.** `multiscale/correctors/LocalCorrectors.py` stores the shared patch inputs and selects one of three direct subclasses. `EllipticCorrectors.py`, `ParabolicCorrectors.py`, and `ModifiedEllipticCorrectors.py` each implement their own `solve()` and configure the solvers they need. They accept a patch mesh, element, coefficient, formulation parameters, solver parameters, and quadrature degree; `solve()` returns directional functions. `create_local_correctors` owns kind validation, while the concrete classes assume a compatible scalar element. `MsFEM_Oversampling` uses the selector. Keep method-specific parameters explicit: no terminal time for elliptic, $(T,N_t)$ for parabolic, and $T$ for modified. All three corrector kinds and all three MsFEM offline paths were smoke-tested; after replacing the explicit parabolic matrices with `LinearProblem`, the direct parabolic corrector and its MsFEM offline path were tested again. Full experiment coverage remains to be checked.
-5. **Metrics promotion — planned.** `experiments/msfem/experiment_metrics.py` remains `AI`. Review its definitions and calculations against `docs/msfem_docs/msfem_docs.qmd`, then move or expose verified metric functionality in an appropriate human-verified location. Update both the tree and provenance record only after that review.
+5. **Metrics promotion — planned.** `experiments/msfem/experiment_metrics.py` remains `AI`. Review its definitions and calculations against `docs/msfem/msfem.qmd`, then move or expose verified metric functionality in an appropriate human-verified location. Update both the tree and provenance record only after that review.
 
 The current approach follows **Oversampling Strategy 2** in Henning and Peterseim, [*Oversampling for the Multiscale Finite Element Method*](https://doi.org/10.1137/120900332): solve directional patch correctors, combine them with coarse gradients, restrict the corrected basis to each coarse cell, and use a coarse test space in the PG formulation. This is an implementation reference, not a claim that the paper's separate constrained oversampling results apply to the present method.
 

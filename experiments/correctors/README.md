@@ -82,6 +82,30 @@ convention, for example
 `R/fixed_T/fixed_T_corrector_l2_error_periodic_1_16_T1.png`. The CSV columns
 are named `total_l2`, `total_h1_semi`, and `total_h1`.
 
+A complete R-by-T grid also produces
+`R/best_T/overview_best_T_<problem>_<epsilon>_<points_per_unit>.png`, using the
+same three error panels and optional upscaling panel as the default-time
+overview. For each R and timed method, every panel chooses the tested grid T
+that minimizes that panel's own error. The elliptic curve has no T. Thus the
+best T for L2, H1, and upscaling may differ. The companion `best_T_*.csv`
+records the selected T, minimum error, and parabolic time-step count for each
+method, R, and metric. These are minima over the tested grid, not continuous
+optima; if a minimum lies at the T-grid boundary, the best time may lie beyond
+the tested interval.
+
+For a complete R-by-T grid, each norm also has two black-and-white heatmaps in
+`figures/overview/`. The `_grayscale.png` figure shows the absolute error on a
+logarithmic scale; darker means larger error, and the color limits clip the
+outer 5% of values to make differences easier to see. The
+`_relative_grayscale.png` figure compares each timed method to the elliptic
+error at the same R. Shades lighter than mid-gray mean lower error than
+elliptic, darker shades mean higher error, and mid-gray means equal error.
+The solid contour marks equality, while the dotted curve with circles marks
+the lowest-error T among the tested grid values for each R. The contour is
+interpolated between grid points; the marked optimum is a grid minimum, not a continuous
+optimization result. Both figures use a common grayscale across their method
+panels.
+
 For this experiment, `modified` defaults to SLEPc's phi function with a lumped mass
 matrix. The `mass_lumped` field in each modified result row distinguishes these
 runs from earlier consistent-mass results. This matches the paper's choice to

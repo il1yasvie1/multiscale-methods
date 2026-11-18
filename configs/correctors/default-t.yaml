@@ -13,7 +13,7 @@ R:
 delta: 0.25
 
 mesh:
-  points_per_unit: 128
+  points_per_unit: 32
 
 T:
   default_setting: true

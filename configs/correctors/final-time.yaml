@@ -1,0 +1,41 @@
+# HPC version
+experiment: correctors
+
+problem:
+  name: periodic
+  epsilon: 1.0
+
+R:
+  start: 0.1
+  stop: 2.0
+  num: 20
+
+delta: 0.25
+
+mesh:
+  points_per_unit: 16
+
+T:
+  default_setting: true
+  start: 1
+  stop: 20
+  num: 10
+
+corrector_kind: [elliptic, parabolic, modified]
+
+parabolic_settings:
+  max_time_step: 0.25
+
+solver_parameters:
+  elliptic:
+    ksp_view: true
+    ksp_monitor: true
+    ksp_type: cg
+    pc_type: gamg
+  parabolic:
+    initial:
+      ksp_type: cg
+      pc_type: gamg
+    step:
+      ksp_type: cg
+      pc_type: gamg

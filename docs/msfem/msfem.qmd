@@ -8,7 +8,7 @@ format:
     css: notes.css
 ---
 
-{{< include _math-macros.qmd >}}
+\newcommand{\fint}{\mathop{\unicode{x2A0F}}\nolimits}
 
 ## Multiscale Elliptic PDEs
 
