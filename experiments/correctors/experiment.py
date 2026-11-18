@@ -16,7 +16,7 @@ def run_one(params: dict, grouped_solver_options: dict | None = None) -> dict:
     from dolfinx import mesh
     from multiscale.correctors import create_local_correctors
     from multiscale.problems import PeriodicCoefficientProblem
-    from .experiment_metrics import compare, inner_measure
+    from .experiment_metrics import compare, inner_measure, upscaling_error
 
     comm = MPI.COMM_WORLD
     started = perf_counter()
@@ -49,6 +49,8 @@ def run_one(params: dict, grouped_solver_options: dict | None = None) -> dict:
 
     started = perf_counter()
     total = compare(correctors, exact, dx_inner)
+    upscaling = upscaling_error(correctors, coefficient, dx_inner,
+                                problem.homogenized_tensor())
     metrics_seconds = comm.allreduce(perf_counter() - started, op=MPI.MAX)
     count = solver.function_space.dofmap.index_map.size_local
     num_dofs = comm.allreduce(count, op=MPI.SUM)
@@ -56,6 +58,7 @@ def run_one(params: dict, grouped_solver_options: dict | None = None) -> dict:
         "num_dofs": num_dofs, "setup_seconds": setup_seconds,
         "solve_seconds": solve_seconds, "metrics_seconds": metrics_seconds,
         **{f"total_{key}": value for key, value in total.items()},
+        **upscaling,
     }
 
 
@@ -90,7 +93,8 @@ def run_config(config_path: str | Path) -> Path:
         if params["run_id"] in completed:
             continue
         if comm.rank == 0:
-            print(f"R={params['R']:g} T={params['T']} {params['corrector_kind']}", flush=True)
+            time_label = f" T={params['T']}" if params["T"] is not None else ""
+            print(f"R={params['R']:g}{time_label} {params['corrector_kind']}", flush=True)
         local_error = None
         try:
             values = run_one(params, grouped_solver_options)

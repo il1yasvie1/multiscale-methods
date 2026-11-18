@@ -3,18 +3,22 @@ method: msfem
 
 problem:
   name: periodic
-  epsilon: [0.05]
+  epsilon: [0.1, 0.05]
 
 mesh:
   N_H: [1, 2]
-  N_h: [4]
+  N_h: [4, 8]
 
-delta: [0.0, 1.0]
-assembly_type: [petrov_galerkin]
+delta: [0.0, 0.5, 1.0]
+assembly_type: [petrov_galerkin, galerkin]
 corrector_kind: [elliptic, parabolic, modified]
 
 parabolic_settings:
   - {final_time: 0.025, num_time_steps: 40}
+  - {final_time: 0.0125, num_time_steps: 80}
+  - {final_time: 0.05, num_time_steps: 20}
 
 modified_settings:
   - {final_time: 0.025}
+  - {final_time: 0.0125}
+  - {final_time: 0.05}

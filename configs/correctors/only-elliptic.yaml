@@ -1,0 +1,24 @@
+experiment: correctors
+
+problem:
+  name: periodic
+  epsilon: 1.0
+
+R:
+  start: 0.1
+  stop: 5
+  num: 50
+
+delta: 0.25
+
+mesh:
+  points_per_unit: 128
+
+corrector_kind: [elliptic]
+
+solver_parameters:
+  elliptic:
+    ksp_view: true
+    ksp_monitor: true
+    ksp_type: gmres
+    pc_type: ilu

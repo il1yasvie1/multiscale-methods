@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from hashlib import sha256
 import json
 import math
@@ -49,19 +50,27 @@ def load_config(path: str | Path) -> dict:
         raise ValueError("This experiment requires the periodic problem with epsilon: 1.0")
     _linspace(config.get("R"), "R")
     delta = config.get("delta")
-    if not isinstance(delta, (int, float)) or not math.isclose(delta, 1.5):
-        raise ValueError("This experiment requires delta = R/L = 1.5")
+    if (type(delta) not in (int, float) or not math.isfinite(delta)
+            or delta < 0):
+        raise ValueError("delta must be finite and nonnegative")
     ppu = config.get("mesh", {}).get("points_per_unit")
     if type(ppu) is not int or ppu < 2:
         raise ValueError("mesh.points_per_unit must be an integer >= 2")
-    time = config.get("T", {})
-    if not isinstance(time, dict) or not time.get("default_setting", False) and not {"start", "stop", "num"} <= time.keys():
-        raise ValueError("T needs a linspace or default_setting: true")
-    if {"start", "stop", "num"} <= time.keys():
-        _linspace(time, "T")
     kinds = config.get("corrector_kind")
     if not isinstance(kinds, list) or not kinds or len(set(kinds)) != len(kinds) or any(k not in KINDS for k in kinds):
         raise ValueError("corrector_kind must be a nonempty subset of elliptic, parabolic, modified")
+    time = config.get("T")
+    if time is None:
+        if any(kind != "elliptic" for kind in kinds):
+            raise ValueError("T needs a linspace or default_setting: true")
+    else:
+        if not isinstance(time, dict) or not time.get("default_setting", False) and not {"start", "stop", "num"} <= time.keys():
+            raise ValueError("T needs a linspace or default_setting: true")
+        if {"start", "stop", "num"} <= time.keys():
+            _linspace(time, "T")
+        if (time.get("default_setting", False) and delta == 0
+                and any(kind != "elliptic" for kind in kinds)):
+            raise ValueError("default T is zero when delta = 0")
     if "parabolic" in kinds:
         max_dt = config.get("parabolic_settings", {}).get("max_time_step")
         if not isinstance(max_dt, (int, float)) or not math.isfinite(max_dt) or max_dt <= 0:
@@ -74,28 +83,50 @@ def solver_parameters(config: dict) -> dict:
     return _solver_parameters(config, default_modified_mass_lumped=True)
 
 
+def core_size(R: float, delta: float) -> float:
+    """Return L when K_R extends K_L by delta*L on every side."""
+    return R / (1 + 2 * delta)
+
+
 def default_time(R: float, delta: float) -> float:
-    L = R / delta
+    L = core_size(R, delta)
     return (R - L) / (2 * math.pi * math.sqrt(ALPHA * BETA))
+
+
+def mesh_intervals(R: float, points_per_unit: int, delta: float) -> int:
+    """Choose a near-uniform resolution and align common rational K_L boundaries."""
+    target = max(math.ceil(points_per_unit * R), math.ceil(1 + 2 * delta))
+    rational_delta = Fraction(str(delta)).limit_denominator(1000)
+    if not math.isclose(float(rational_delta), delta, rel_tol=0, abs_tol=1e-12):
+        return target
+    ratio = 1 + 2 * rational_delta
+    left_edge = (ratio - 1) / (2 * ratio)
+    multiple = left_edge.denominator
+    # Avoid a pathological mesh size for a highly resolved decimal delta.
+    if multiple > 120:
+        return target
+    return multiple * math.ceil(target / multiple)
 
 
 def expand_runs(config: dict) -> list[dict]:
     grouped_options = solver_parameters(config)
     radii = _linspace(config["R"], "R")
-    time_spec = config["T"]
-    grid_times = _linspace(time_spec, "T") if {"start", "stop", "num"} <= time_spec.keys() else []
     kinds = config["corrector_kind"]
+    has_timed_method = any(kind != "elliptic" for kind in kinds)
+    time_spec = config.get("T") or {}
+    grid_times = (_linspace(time_spec, "T")
+                  if has_timed_method and {"start", "stop", "num"} <= time_spec.keys()
+                  else [])
     delta = float(config["delta"])
     ppu = config["mesh"]["points_per_unit"]
     max_dt = config.get("parabolic_settings", {}).get("max_time_step")
     runs = []
     for R in radii:
-        L = R / delta
-        # n divisible by 6 places both edges of K_L on mesh lines.
-        n = 6 * math.ceil(ppu * R / 6)
-        T_default = default_time(R, delta)
+        L = core_size(R, delta)
+        n = mesh_intervals(R, ppu, delta)
+        T_default = default_time(R, delta) if has_timed_method else None
         times = [(T, "grid") for T in grid_times]
-        if time_spec.get("default_setting", False):
+        if has_timed_method and time_spec.get("default_setting", False):
             match = next((i for i, (T, _) in enumerate(times) if math.isclose(T, T_default, rel_tol=1e-12)), None)
             if match is None:
                 times.append((T_default, "default"))

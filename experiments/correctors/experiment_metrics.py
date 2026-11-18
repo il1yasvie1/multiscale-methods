@@ -1,4 +1,4 @@
-"""L2, H1-seminorm, and H1 corrector errors on the exact inner square."""
+"""Corrector and effective-tensor errors on the exact inner square."""
 
 import math
 
@@ -17,6 +17,27 @@ def inner_measure(domain, L: float):
     return ufl.Measure("dx", domain=domain, subdomain_data=tags)(
         1, metadata={"quadrature_degree": 12}
     )
+
+
+def upscaling_error(correctors, coefficient, dx_inner,
+                    exact: np.ndarray) -> dict[str, float | str]:
+    """Uniform flux average over K_L for each corrector method."""
+    domain = dx_inner.ufl_domain().ufl_cargo()
+    local_area = fem.assemble_scalar(fem.form(1.0 * dx_inner))
+    inner_area = domain.comm.allreduce(float(np.real(local_area)), op=MPI.SUM)
+    if inner_area <= 0:
+        raise ValueError("The mesh contains no cells in K_L")
+    tensor = np.empty((2, 2))
+    for j, corrector in enumerate(correctors):
+        ej = ufl.as_vector([int(i == j) for i in range(2)])
+        flux = coefficient * (ej + ufl.grad(corrector))
+        for i in range(2):
+            local = fem.assemble_scalar(fem.form(flux[i] * dx_inner))
+            tensor[i, j] = domain.comm.allreduce(float(np.real(local)), op=MPI.SUM) / inner_area
+    error = float(np.linalg.norm(tensor - exact, ord="fro"))
+    return {"upscaling_domain": "K_L", "a0_error_frobenius": error,
+            **{f"a0_{i + 1}{j + 1}": float(tensor[i, j])
+               for i in range(2) for j in range(2)}}
 
 
 def compare(correctors, references, dx) -> dict[str, float]:

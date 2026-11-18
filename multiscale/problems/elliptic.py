@@ -93,6 +93,9 @@ class PeriodicCoefficientProblem(EllipticProblemData):
             self.coefficient(domain) * ufl.grad(self.exact_solution(domain))
         )
 
+    def homogenized_tensor(self) -> np.ndarray:
+        return np.eye(2) / (8 * math.pi**2)
+
     def periodic_cell_correctors(self, domain: Mesh):
         x = ufl.SpatialCoordinate(domain)
         chi = self.epsilon / (4 * ufl.pi) * ufl.sin(

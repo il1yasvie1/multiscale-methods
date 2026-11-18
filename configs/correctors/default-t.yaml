@@ -1,0 +1,37 @@
+experiment: correctors
+
+problem:
+  name: periodic
+  epsilon: 1.0
+
+R:
+  start: 0.1
+  stop: 5.0
+  num: 50
+
+delta: 0.25
+
+mesh:
+  points_per_unit: 16
+
+T:
+  default_setting: true
+
+corrector_kind: [elliptic, parabolic, modified]
+
+parabolic_settings:
+  max_time_step: 0.25
+
+solver_parameters:
+  elliptic:
+    ksp_view: true
+    ksp_monitor: true
+    ksp_type: gmres
+    pc_type: ilu
+  parabolic:
+    initial:
+      ksp_type: gmres
+      pc_type: ilu
+    step:
+      ksp_type: gmres
+      pc_type: ilu

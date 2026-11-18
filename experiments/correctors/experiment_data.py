@@ -25,13 +25,19 @@ def prepare_experiment(config: dict) -> Path:
                                         if key != "solver_parameters"}
         current_without_diagnostics = {key: value for key, value in config.items()
                                        if key != "solver_parameters"}
-        if previous_without_diagnostics != current_without_diagnostics:
+        old_kinds = previous_without_diagnostics.pop("corrector_kind", [])
+        new_kinds = current_without_diagnostics.pop("corrector_kind", [])
+        if (previous_without_diagnostics != current_without_diagnostics
+                or not set(old_kinds) <= set(new_kinds)):
             raise ValueError("Experiment config changed; use a new experiment_name")
         if numerical_solver_settings(previous, default_modified_mass_lumped=True,
                                      legacy_snapshot=True) != numerical_solver_settings(
                                          config, default_modified_mass_lumped=True
                                      ):
             raise ValueError("Numerical solver settings changed; use a new experiment_name")
+        if old_kinds != new_kinds:
+            snapshot.write_text(yaml.safe_dump(config, sort_keys=False),
+                                encoding="utf-8")
     else:
         snapshot.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     return csv_path
@@ -44,8 +50,11 @@ def load_results(csv_path: Path) -> pd.DataFrame:
 def completed_run_ids(table: pd.DataFrame) -> set[str]:
     if table.empty:
         return set()
-    required = ("total_l2", "total_h1_semi", "total_h1")
-    complete = (table.status == "completed") & table.reindex(columns=required).notna().all(axis=1)
+    required = ("total_l2", "total_h1_semi", "total_h1", "a0_error_frobenius",
+                "a0_11", "a0_12", "a0_21", "a0_22")
+    complete = ((table.status == "completed")
+                & table.reindex(columns=required).notna().all(axis=1)
+                & table.reindex(columns=["upscaling_domain"]).eq("K_L").iloc[:, 0])
     return set(table.loc[complete, "run_id"])
 
 

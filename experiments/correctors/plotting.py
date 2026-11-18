@@ -12,9 +12,9 @@ import pandas as pd
 NORMS = ("l2", "h1_semi", "h1")
 KINDS = ("elliptic", "parabolic", "modified")
 STYLES = {
-    "elliptic": dict(color="tab:blue", linestyle="--", marker="o"),
-    "parabolic": dict(color="tab:red", linestyle="-", marker="s"),
-    "modified": dict(color="tab:green", linestyle="-.", marker="^"),
+    "elliptic": dict(color="tab:blue", linestyle="--"),
+    "parabolic": dict(color="tab:red", linestyle="-"),
+    "modified": dict(color="tab:green", linestyle="-."),
 }
 KIND_LABELS = {
     "elliptic": r"$\alpha=\mathrm{ell}$",
@@ -60,6 +60,17 @@ def _save(fig, path: Path) -> None:
 def _format(ax, x: str, norm: str, title: str = "") -> None:
     ax.set(xlabel=f"${x}$", ylabel=Y_LABELS[norm], title=title)
     ax.grid(True, which="both", alpha=0.25)
+
+
+def _elliptic_R_axes(ax, table, norm: str) -> bool:
+    rows = table.loc[table.corrector_kind == "elliptic"].sort_values("R")
+    if len(rows) < 2:
+        return False
+    ax.semilogy(rows.R, rows[f"total_{norm}"], label=KIND_LABELS["elliptic"],
+                **STYLES["elliptic"])
+    _format(ax, "R", norm)
+    ax.legend(fontsize=9)
+    return True
 
 
 def _default_axes(ax, table, norm: str) -> bool:
@@ -119,7 +130,10 @@ def _single_and_overview(table, grid, figures: Path) -> int:
     facet = _facet(table)
     times = np.sort(grid["T"].unique())
     radii = np.sort(grid.R.unique())
-    families = [("fixed_default_T", None, _default_axes, figures / "R/fixed_default_T")]
+    if table.corrector_kind.eq("elliptic").all():
+        families = [("R", None, _elliptic_R_axes, figures / "R")]
+    else:
+        families = [("fixed_default_T", None, _default_axes, figures / "R/fixed_default_T")]
     families += [("fixed_T", T, _fixed_T_axes, figures / "R/fixed_T") for T in times]
     families += [("fixed_R", R, _fixed_R_axes, figures / "T/fixed_R") for R in radii]
     for family, value, draw, directory in families:
@@ -136,10 +150,17 @@ def _single_and_overview(table, grid, figures: Path) -> int:
                 plt.close(fig)
         if len(panels) < 2:
             continue
-        fig, axes = plt.subplots(1, len(panels), figsize=(5.3 * len(panels), 4.5))
+        upscaling_rows = _upscaling_rows(table)
+        upscaling_panel = (family in ("R", "fixed_default_T")
+                           and any((upscaling_rows.corrector_kind == kind).sum() >= 2
+                                   for kind in KINDS))
+        panel_count = len(panels) + int(upscaling_panel)
+        fig, axes = plt.subplots(1, panel_count, figsize=(5.3 * panel_count, 4.5))
         for ax, norm in zip(np.atleast_1d(axes), panels):
             args = (table, norm) if value is None else (table, grid, value, norm)
             draw(ax, *args)
+        if upscaling_panel:
+            _upscaling_axes(np.atleast_1d(axes)[-1], table)
         _save(fig, figures / "overview" / f"overview_{family}_{facet}{suffix}.png")
         count += 1
     return count
@@ -172,7 +193,7 @@ def _colored_sweep(table, grid, figures: Path, norm: str, axis: str) -> int:
         baseline = table.loc[table.corrector_kind == "elliptic"].sort_values("R")
         if len(baseline) >= 2:
             ax.semilogy(baseline.R, baseline[f"total_{norm}"], color="black",
-                        linestyle=":", marker="o", label=KIND_LABELS["elliptic"])
+                        linestyle=":", label=KIND_LABELS["elliptic"])
     _format(ax, axis, norm)
     ax.legend(fontsize=7, ncol=2)
     _save(fig, figures / axis /
@@ -211,6 +232,53 @@ def _heatmap(grid, figures: Path, norm: str) -> int:
     return 1
 
 
+def _upscaling_rows(table):
+    if not {"a0_error_frobenius", "upscaling_domain"} <= set(table.columns):
+        return table.iloc[:0]
+    valid = (table.upscaling_domain.eq("K_L")
+             & table.a0_error_frobenius.gt(0)
+             & np.isfinite(table.a0_error_frobenius))
+    # A time sweep can have multiple values at each R; this R plot uses
+    # the default T(R) for timed correctors.
+    selected = table.corrector_kind.eq("elliptic") | table.time_source.isin(
+        ["default", "grid_default"]
+    )
+    return table.loc[valid & selected].sort_values("R")
+
+
+def _upscaling_axes(ax, table) -> bool:
+    rows = _upscaling_rows(table)
+    plotted = False
+    guide = None
+    for kind in KINDS:
+        method = rows.loc[rows.corrector_kind == kind]
+        if len(method) < 2:
+            continue
+        R = method.R.to_numpy(dtype=float)
+        errors = method.a0_error_frobenius.to_numpy(dtype=float)
+        ax.loglog(R, errors, label=KIND_LABELS[kind], **STYLES[kind])
+        if guide is None:
+            guide = (R, errors[0] * R[0] / R)
+        plotted = True
+    if not plotted:
+        return False
+    ax.loglog(*guide, color="0.4", linestyle=":", label=r"$O(R^{-1})$")
+    ax.set(xlabel=r"$R$",
+           ylabel=r"$\|a_{R,L}^{0,\alpha,h}-a^0\|_F$")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(fontsize=9)
+    return True
+
+
+def _upscaling_plot(table, figures: Path) -> int:
+    fig, ax = plt.subplots(figsize=(7, 4.4))
+    if not _upscaling_axes(ax, table):
+        plt.close(fig)
+        return 0
+    _save(fig, figures / "R" / f"R_upscaling_error_{_facet(table)}.png")
+    return 1
+
+
 def make_plots(csv_path: Path) -> int:
     table = pd.read_csv(csv_path, dtype={"run_id": str})
     table = table.loc[table.status == "completed"].copy()
@@ -236,6 +304,7 @@ def make_plots(csv_path: Path) -> int:
     _prepare_dirs(figures)
     grid = table.loc[table.time_source.isin(["grid", "grid_default"])].copy()
     count = _single_and_overview(table, grid, figures)
+    count += _upscaling_plot(table, figures)
     for norm in NORMS:
         count += _colored_sweep(table, grid, figures, norm, "R")
         count += _colored_sweep(table, grid, figures, norm, "T")
