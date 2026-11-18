@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=correctors-only-elliptic-128
+#SBATCH --job-name=correctors-default-t-64
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=u3013241@connect.hku.hk
 #SBATCH --partition=intel
@@ -9,7 +9,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=64G
+#SBATCH --mem=96G
 #SBATCH --output=logs/%x.out.%j
 #SBATCH --error=logs/%x.err.%j
 
@@ -33,7 +33,7 @@ mpirun -n "${SLURM_NTASKS}" \
     singularity exec -w "${SANDBOX_DIR}" \
     bash -c "
         cd '${PROJECT_DIR}'
-        python run_experiment.py configs/correctors/only-elliptic-128.yaml
+        python run_experiment.py configs/correctors/default-t-64.yaml
     "
 
 echo "Job finish: $(date)"
