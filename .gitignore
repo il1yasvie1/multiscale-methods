@@ -24,3 +24,5 @@ __pycache__/
 /docs/msfem_docs/*.log
 /docs/msfem_docs/*.out
 /docs/msfem_docs/*.toc
+
+/logs

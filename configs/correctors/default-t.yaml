@@ -1,3 +1,4 @@
+# HPC version
 experiment: correctors
 
 problem:
@@ -6,13 +7,13 @@ problem:
 
 R:
   start: 0.1
-  stop: 5.0
-  num: 50
+  stop: 15.0
+  num: 150
 
 delta: 0.25
 
 mesh:
-  points_per_unit: 16
+  points_per_unit: 128
 
 T:
   default_setting: true
@@ -26,12 +27,12 @@ solver_parameters:
   elliptic:
     ksp_view: true
     ksp_monitor: true
-    ksp_type: gmres
-    pc_type: ilu
+    ksp_type: cg
+    pc_type: gamg
   parabolic:
     initial:
-      ksp_type: gmres
-      pc_type: ilu
+      ksp_type: cg
+      pc_type: gamg
     step:
-      ksp_type: gmres
-      pc_type: ilu
+      ksp_type: cg
+      pc_type: gamg
