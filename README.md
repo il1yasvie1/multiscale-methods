@@ -48,6 +48,10 @@ solver = create_local_correctors(
 correctors = solver.solve()
 ```
 
+When using `MsFEM_Oversampling` directly, call `method.close()` after the
+online solve to release its coarse PETSc matrix and vector. A subsequent
+`offline()` call also releases the previous coarse system before rebuilding it.
+
 `LocalCorrectors` stores the common patch data and selects a concrete class.
 Each of `EllipticCorrectors`, `ParabolicCorrectors`, and
 `ModifiedEllipticCorrectors` implements its own `solve()`. The current forms

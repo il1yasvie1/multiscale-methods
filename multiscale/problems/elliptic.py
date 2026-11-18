@@ -31,7 +31,10 @@ class EllipticProblemData(ABC):
             a, L, bcs=[bc], petsc_options_prefix="elliptic_problem_",
             petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
         )
-        return problem.solve()
+        try:
+            return problem.solve()
+        finally:
+            del problem
 
 
 class ConstantCoefficientProblem(EllipticProblemData):

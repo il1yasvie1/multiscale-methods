@@ -79,53 +79,55 @@ def solve_fields(settings, output):
     if np.any(core <= 0) or np.any(core >= 1):
         raise ValueError("Select an interior coarse element")
     method = None
-    for kind in KINDS:
-        path = output / f"{kind}.npz"
-        if path.exists():
-            with np.load(path) as archive:
-                if json.loads(str(archive["settings"])) != settings:
-                    raise ValueError(f"Different settings in {path}; choose another --output directory")
-            print(f"Reuse {path}", flush=True)
-            continue
-        if method is None:
-            method = MsFEM_Oversampling(problem, coarse, (N_h // N_H).bit_length() - 1)
-        captured = {}
-        processed = 0
+    try:
+        for kind in KINDS:
+            path = output / f"{kind}.npz"
+            if path.exists():
+                with np.load(path) as archive:
+                    if json.loads(str(archive["settings"])) != settings:
+                        raise ValueError(f"Different settings in {path}; choose another --output directory")
+                print(f"Reuse {path}", flush=True)
+                continue
+            if method is None:
+                method = MsFEM_Oversampling(problem, coarse, (N_h // N_H).bit_length() - 1)
+            captured = {}
+            processed = 0
 
-        def observe(patch, core_cells, correctors):
-            nonlocal processed
-            processed += 1
-            indices = np.asarray(patch.geometry.dofmaps[0])[core_cells]
-            center = patch.geometry.x[indices, :2].mean(axis=(0, 1))
-            if np.allclose(center, centers[cell], rtol=0, atol=1e-12):
-                xy, triangles, first = _function_arrays(correctors[0])
-                pp, pc = _mesh_arrays(patch)
-                captured.update(patch_xy=xy, patch_triangles=triangles,
-                                correctors=np.array([first, correctors[1].x.array.real.copy()]),
-                                patch_boundary=_edges(pp, pc, boundary=True))
-            if processed % 64 == 0:
-                print(f"{kind}: {processed}/{len(cc)} patches", flush=True)
+            def observe(patch, core_cells, correctors):
+                nonlocal processed
+                processed += 1
+                indices = np.asarray(patch.geometry.dofmaps[0])[core_cells]
+                center = patch.geometry.x[indices, :2].mean(axis=(0, 1))
+                if np.allclose(center, centers[cell], rtol=0, atol=1e-12):
+                    xy, triangles, first = _function_arrays(correctors[0])
+                    pp, pc = _mesh_arrays(patch)
+                    captured.update(patch_xy=xy, patch_triangles=triangles,
+                                    correctors=np.array([first, correctors[1].x.array.real.copy()]),
+                                    patch_boundary=_edges(pp, pc, boundary=True))
+                if processed % 64 == 0:
+                    print(f"{kind}: {processed}/{len(cc)} patches", flush=True)
 
-        options = {} if kind == "elliptic" else {"final_time": settings["T"]}
-        if kind == "parabolic":
-            options["num_time_steps"] = settings["N_t"]
-        method.offline(settings["delta"], corrector_kind=kind,
-                       assembly_type=settings["assembly_type"],
-                       corrector_observer=observe, **options)
-        if not captured:
-            raise RuntimeError("The selected local corrector was not captured")
-        solution = method.online()
-        xy, triangles, values = _function_arrays(solution)
-        path_tmp = path.with_suffix(".tmp.npz")
-        np.savez_compressed(path_tmp, settings=json.dumps(settings),
-                            xy=xy, triangles=triangles, solution=values,
-                            coarse_xy=cp, coarse_triangles=cc, core=core,
-                            coarse_cell=cell, **captured)
-        path_tmp.replace(path)
-        print(f"Saved {path}", flush=True)
-        method.A_H.destroy()
-        method.b_H.destroy()
-        method.A_H = method.b_H = None
+            options = {} if kind == "elliptic" else {"final_time": settings["T"]}
+            if kind == "parabolic":
+                options["num_time_steps"] = settings["N_t"]
+            method.offline(settings["delta"], corrector_kind=kind,
+                           assembly_type=settings["assembly_type"],
+                           corrector_observer=observe, **options)
+            if not captured:
+                raise RuntimeError("The selected local corrector was not captured")
+            solution = method.online()
+            xy, triangles, values = _function_arrays(solution)
+            path_tmp = path.with_suffix(".tmp.npz")
+            np.savez_compressed(path_tmp, settings=json.dumps(settings),
+                                xy=xy, triangles=triangles, solution=values,
+                                coarse_xy=cp, coarse_triangles=cc, core=core,
+                                coarse_cell=cell, **captured)
+            path_tmp.replace(path)
+            print(f"Saved {path}", flush=True)
+
+    finally:
+        if method is not None:
+            method.close()
 
 
 def _save(fig, output, name):

@@ -33,6 +33,10 @@ class EllipticCorrectors(LocalCorrectors):
                 petsc_options_prefix="local_corrector_problem_",
                 petsc_options=petsc_options,
             )
-            uj = problem.solve()
+            try:
+                uj = problem.solve()
+            finally:
+                # LinearProblem owns its PETSc objects and releases them on deletion.
+                del problem
             correctors.append(uj)
         return correctors

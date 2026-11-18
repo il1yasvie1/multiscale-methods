@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from contextlib import ExitStack
 from typing import Callable, Literal
 
 import dolfinx
@@ -46,6 +47,15 @@ class MsFEM_Oversampling:
         self.cell_basis_data: dict[int, CellBasisData] = {}
         self.A_H: PETSc.Mat | None = None
         self.b_H: PETSc.Vec | None = None
+
+    def close(self) -> None:
+        """Release the coarse PETSc system, including before another offline solve."""
+        if self.b_H is not None:
+            self.b_H.destroy()
+            self.b_H = None
+        if self.A_H is not None:
+            self.A_H.destroy()
+            self.A_H = None
 
     def _assemble_locally(
         self,
@@ -140,6 +150,7 @@ class MsFEM_Oversampling:
         if num_time_steps is not None:
             corrector_parameters["num_time_steps"] = num_time_steps
 
+        self.close()
         self.cell_basis_data.clear()
         local_contributions = []
         local_error = None
@@ -195,6 +206,7 @@ class MsFEM_Oversampling:
         contributions = self.comm.gather(local_contributions, root=0)
         assembly_error = None
         if self.comm.rank == 0:
+            A_H = b_H = None
             try:
                 A_H = PETSc.Mat().createAIJ(
                     (self.num_coarse_dofs, self.num_coarse_dofs),
@@ -219,6 +231,10 @@ class MsFEM_Oversampling:
                 b_H.assemble()
                 self.A_H, self.b_H = A_H, b_H
             except Exception as error:
+                if b_H is not None:
+                    b_H.destroy()
+                if A_H is not None:
+                    A_H.destroy()
                 assembly_error = f"{type(error).__name__}: {error}"
         assembly_error = self.comm.bcast(assembly_error, root=0)
         if assembly_error:
@@ -243,17 +259,18 @@ class MsFEM_Oversampling:
         coarse_values, solve_error = None, None
         if self.comm.rank == 0:
             try:
-                solver = PETSc.KSP().create(self.A_H.comm)
-                coarse_solution = self.A_H.createVecRight()
-                solver.setOptionsPrefix("coarse_problem_")
-                solver.setOperators(self.A_H)
-                solver.setType(PETSc.KSP.Type.PREONLY)
-                solver.getPC().setType(PETSc.PC.Type.LU)
-                solver.setErrorIfNotConverged(True)
-                solver.solve(self.b_H, coarse_solution)
-                coarse_values = coarse_solution.getArray(readonly=True).copy()
-                coarse_solution.destroy()
-                solver.destroy()
+                with ExitStack() as resources:
+                    solver = PETSc.KSP().create(self.A_H.comm)
+                    resources.callback(solver.destroy)
+                    coarse_solution = self.A_H.createVecRight()
+                    resources.callback(coarse_solution.destroy)
+                    solver.setOptionsPrefix("coarse_problem_")
+                    solver.setOperators(self.A_H)
+                    solver.setType(PETSc.KSP.Type.PREONLY)
+                    solver.getPC().setType(PETSc.PC.Type.LU)
+                    solver.setErrorIfNotConverged(True)
+                    solver.solve(self.b_H, coarse_solution)
+                    coarse_values = coarse_solution.getArray(readonly=True).copy()
             except Exception as error:
                 solve_error = f"{type(error).__name__}: {error}"
         coarse_values, solve_error = self.comm.bcast((coarse_values, solve_error), root=0)

@@ -61,66 +61,67 @@ def run_one(params: dict, baseline_cache: dict, solver_options: dict | None = No
     )
     refinements = (params["N_h"] // params["N_H"]).bit_length() - 1
     method = MsFEM_Oversampling(problem, coarse_mesh, refinements)
-    setup_seconds = comm.allreduce(perf_counter() - started, op=MPI.MAX)
-    result = {
-        "setup_seconds": setup_seconds,
-        "num_of_coarse_cells": method.num_coarse_cells,
-        "num_of_fine_cells": method.fine_mesh.topology.index_map(method.tdim).size_local,
-        "num_of_coarse_dofs": method.num_coarse_dofs,
-        "num_of_reconstruction_dofs": method.V_multiscale.dofmap.index_map.size_local,
-    }
+    try:
+        setup_seconds = comm.allreduce(perf_counter() - started, op=MPI.MAX)
+        result = {
+            "setup_seconds": setup_seconds,
+            "num_of_coarse_cells": method.num_coarse_cells,
+            "num_of_fine_cells": method.fine_mesh.topology.index_map(method.tdim).size_local,
+            "num_of_coarse_dofs": method.num_coarse_dofs,
+            "num_of_reconstruction_dofs": method.V_multiscale.dofmap.index_map.size_local,
+        }
 
-    corrector_error = CorrectorError(problem) if hasattr(
-        problem, "periodic_cell_correctors"
-    ) else None
-    started = perf_counter()
-    method.offline(
-        params["delta"], corrector_kind=params["corrector_kind"],
-        final_time=params["final_time"], num_time_steps=params["num_time_steps"],
-        assembly_type=params["assembly_type"],
-        solver_parameters=solver_options,
-        corrector_observer=corrector_error,
-    )
-    offline_seconds = perf_counter() - started - (
-        corrector_error.seconds if corrector_error else 0.0)
-    result["offline_seconds"] = comm.allreduce(offline_seconds, op=MPI.MAX)
-    if corrector_error is not None:
-        corrector_error.l2_squared = comm.allreduce(corrector_error.l2_squared, op=MPI.SUM)
-        corrector_error.h1_semi_squared = comm.allreduce(corrector_error.h1_semi_squared, op=MPI.SUM)
-        corrector_error.seconds = comm.allreduce(corrector_error.seconds, op=MPI.MAX)
-
-    started = perf_counter()
-    solution = method.online()
-    result["online_seconds"] = comm.allreduce(perf_counter() - started, op=MPI.MAX)
-    started = perf_counter()
-    result.update(interface_jumps(method, solution))
-    jump_seconds = perf_counter() - started
-
-    if comm.rank == 0:
-        if params["problem"] == "random":
-            # Reference and reconstructed solution must live on this run's mesh.
-            started = perf_counter()
-            reference = problem.reference_solution(method.fine_mesh)
-            result["fine_fem_solve_seconds"] = perf_counter() - started
-            result["num_of_fine_dofs"] = reference.function_space.dofmap.index_map.size_local
-            target = reference
-        else:
-            key = (params["problem"], params["epsilon"], params["N_H"], params["N_h"])
-            if key not in baseline_cache:
-                baseline_cache[key] = _baseline(method, problem)
-            result.update(baseline_cache[key])
-            target = problem.exact_solution(method.fine_mesh)
+        corrector_error = CorrectorError(problem) if hasattr(
+            problem, "periodic_cell_correctors"
+        ) else None
         started = perf_counter()
-        result.update({f"msfem_{key}": value for key, value in
-                       solution_errors(solution, target).items()})
-        if corrector_error is not None:
-            result.update(corrector_error.results())
-        result["metrics_seconds"] = perf_counter() - started + jump_seconds + (
-            corrector_error.seconds if corrector_error else 0.0
+        method.offline(
+            params["delta"], corrector_kind=params["corrector_kind"],
+            final_time=params["final_time"], num_time_steps=params["num_time_steps"],
+            assembly_type=params["assembly_type"],
+            solver_parameters=solver_options,
+            corrector_observer=corrector_error,
         )
-        method.A_H.destroy()
-        method.b_H.destroy()
-    return result
+        offline_seconds = perf_counter() - started - (
+            corrector_error.seconds if corrector_error else 0.0)
+        result["offline_seconds"] = comm.allreduce(offline_seconds, op=MPI.MAX)
+        if corrector_error is not None:
+            corrector_error.l2_squared = comm.allreduce(corrector_error.l2_squared, op=MPI.SUM)
+            corrector_error.h1_semi_squared = comm.allreduce(corrector_error.h1_semi_squared, op=MPI.SUM)
+            corrector_error.seconds = comm.allreduce(corrector_error.seconds, op=MPI.MAX)
+
+        started = perf_counter()
+        solution = method.online()
+        result["online_seconds"] = comm.allreduce(perf_counter() - started, op=MPI.MAX)
+        started = perf_counter()
+        result.update(interface_jumps(method, solution))
+        jump_seconds = perf_counter() - started
+
+        if comm.rank == 0:
+            if params["problem"] == "random":
+                # Reference and reconstructed solution must live on this run's mesh.
+                started = perf_counter()
+                reference = problem.reference_solution(method.fine_mesh)
+                result["fine_fem_solve_seconds"] = perf_counter() - started
+                result["num_of_fine_dofs"] = reference.function_space.dofmap.index_map.size_local
+                target = reference
+            else:
+                key = (params["problem"], params["epsilon"], params["N_H"], params["N_h"])
+                if key not in baseline_cache:
+                    baseline_cache[key] = _baseline(method, problem)
+                result.update(baseline_cache[key])
+                target = problem.exact_solution(method.fine_mesh)
+            started = perf_counter()
+            result.update({f"msfem_{key}": value for key, value in
+                           solution_errors(solution, target).items()})
+            if corrector_error is not None:
+                result.update(corrector_error.results())
+            result["metrics_seconds"] = perf_counter() - started + jump_seconds + (
+                corrector_error.seconds if corrector_error else 0.0
+            )
+        return result
+    finally:
+        method.close()
 
 
 def run_config(config_path: Path) -> None:
