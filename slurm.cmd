@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=correctors-default-t-64
+#SBATCH --job-name=correctors-final-time
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=u3013241@connect.hku.hk
 #SBATCH --partition=intel
@@ -33,7 +33,7 @@ mpirun -n "${SLURM_NTASKS}" \
     singularity exec -w "${SANDBOX_DIR}" \
     bash -c "
         cd '${PROJECT_DIR}'
-        python run_experiment.py configs/correctors/default-t-64.yaml
+        python run_experiment.py configs/correctors/final-time.yaml
     "
 
 echo "Job finish: $(date)"

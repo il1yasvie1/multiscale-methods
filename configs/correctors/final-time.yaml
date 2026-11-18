@@ -7,19 +7,19 @@ problem:
 
 R:
   start: 0.1
-  stop: 2.0
-  num: 20
+  stop: 15.0
+  num: 150
 
 delta: 0.25
 
 mesh:
-  points_per_unit: 16
+  points_per_unit: 32
 
 T:
   default_setting: true
   start: 1
   stop: 20
-  num: 10
+  num: 77
 
 corrector_kind: [elliptic, parabolic, modified]
 
