@@ -65,10 +65,15 @@ class ParabolicCorrectors(LocalCorrectors):
             step_matrix = fem_petsc.assemble_matrix(step_form, bcs=bcs)
             resources.callback(step_matrix.destroy)
             step_matrix.assemble()
+            stiffness_matrix = fem_petsc.assemble_matrix(fem.form(stiffness), bcs=bcs)
+            resources.callback(stiffness_matrix.destroy)
+            stiffness_matrix.assemble()
             initial_solver = create_solver(constrained_mass, "parabolic_initial_", "initial")
             resources.callback(initial_solver.destroy)
             step_solver = create_solver(step_matrix, "parabolic_step_", "step")
             resources.callback(step_solver.destroy)
+            final_solver = create_solver(stiffness_matrix, "parabolic_final_", "step")
+            resources.callback(final_solver.destroy)
             step_rhs = mass.createVecLeft()
             resources.callback(step_rhs.destroy)
             correctors = []
@@ -87,17 +92,18 @@ class ParabolicCorrectors(LocalCorrectors):
                     initial_solver.solve(initial_rhs, wj.x.petsc_vec)
                     wj.x.scatter_forward()
 
-                    uj = fem.Function(V)
-                    uj.x.array[:] = 0.5 * time_step * wj.x.array
-                    for step in range(num_time_steps):
+                    for _ in range(num_time_steps):
                         mass.mult(wj.x.petsc_vec, step_rhs)
                         fem_petsc.set_bc(step_rhs, bcs)
                         step_solver.solve(step_rhs, wj_next.x.petsc_vec)
                         wj_next.x.scatter_forward()
-                        weight = 0.5 if step == num_time_steps - 1 else 1.0
-                        uj.x.array[:] += weight * time_step * wj_next.x.array
                         wj, wj_next = wj_next, wj
 
+                    mass.mult(wj.x.petsc_vec, step_rhs)
+                    initial_rhs.axpy(-1.0, step_rhs)
+                    fem_petsc.set_bc(initial_rhs, bcs)
+                    uj = fem.Function(V)
+                    final_solver.solve(initial_rhs, uj.x.petsc_vec)
                     uj.x.scatter_forward()
                     correctors.append(uj)
 

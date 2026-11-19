@@ -245,11 +245,19 @@ $$
 \int_{S^\delta_K}w^h_{j,n}v^h\,\mathrm{d}x +\Delta t\int_{S^\delta_K}a^\varepsilon\nabla w^h_{j,n}\cdot\nabla v^h\,\mathrm{d}x =\int_{S^\delta_K}w^h_{j,n-1}v^h\,\mathrm{d}x,\quad\forall v^h\in\mathring V^h(S^\delta_K).
 $$
 
-**(iii) Trapezoidal rule.** Compute
+**(iii) Terminal elliptic solve.** After the final time step, find
+$u^{h,\mathrm{par}}_{j,K}(T)\in\mathring V^h(S^\delta_K)$ such that
 
 $$
-u^{h,\mathrm{par}}_{j,K}(T) :=\Delta t\left( \frac12w^h_{j,0} +\sum_{n=1}^{N_t-1}w^h_{j,n} +\frac12w^h_{j,N_t} \right).
+\int_{S^\delta_K}a^\varepsilon\nabla u^{h,\mathrm{par}}_{j,K}(T)\cdot\nabla v^h\,\mathrm{d}x
+=-\int_{S^\delta_K}a^\varepsilon e_j\cdot\nabla v^h\,\mathrm{d}x
+-\int_{S^\delta_K}w^h_{j,N_t}v^h\,\mathrm{d}x,
+\quad\forall v^h\in\mathring V^h(S^\delta_K).
 $$
+
+Summing the backward-Euler equations shows that this equals
+$\Delta t\sum_{n=1}^{N_t}w^h_{j,n}$ with the same discrete mass and stiffness
+operators. The terminal elliptic solve uses the parabolic `step` solver options.
 
 #### `ModifiedEllipticCorrectors` {#modified-correctors}
 
