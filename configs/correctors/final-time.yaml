@@ -6,20 +6,20 @@ problem:
   epsilon: 1.0
 
 R:
-  start: 0.1
+  start: 0.25
   stop: 15.0
-  num: 150
+  num: 60
 
 delta: 0.25
 
 mesh:
-  points_per_unit: 32
+  points_per_unit: 16
 
 T:
   default_setting: true
   start: 1
   stop: 20
-  num: 77
+  num: 20
 
 corrector_kind: [elliptic, parabolic, modified]
 
